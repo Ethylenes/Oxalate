@@ -1,0 +1,4 @@
+(executable
+(name main)
+(libraries llvm llvm.analysis llvm.executionengine llvm.passbuilder
+            llvm.target llvm.all_backends ctypes ctypes.foreign))

@@ -1,0 +1,144 @@
+== HLO (as written) ==
+HloModule main
+ENTRY main{
+  v0 = f64[1000000] parameter(0)
+  v1 = f64[1000000] parameter(1)
+  v2 = f64[1000000] multiply(v0, v1)
+  v3 = f64[1000000] constant(3)
+  v4 = f64[1000000] constant(2)
+  v5 = f64[1000000] multiply(v4, v3)
+  v6 = f64[1000000] constant(1)
+  v7 = f64[1000000] add(v2, v5)
+  v8 = f64[1000000] multiply(v7, v6)
+  v9 = f64[1000000] constant(0)
+  v10 = f64[1000000] maximum(v8, v9)
+  v11 = f64[1000000] multiply(v1, v0)
+  v12 = f64[1000000] negate(v0)
+  ROOT v13 = f64[1000000] add(v10, v11)
+}
+
+== HLO (optimized) ==
+HloModule main
+ENTRY main{
+  v0 = f64[1000000] parameter(0)
+  v1 = f64[1000000] parameter(1)
+  v2 = f64[1000000] multiply(v0, v1)
+  v3 = f64[1000000] constant(6)
+  v4 = f64[1000000] add(v2, v3)
+  v5 = f64[1000000] constant(0)
+  v6 = f64[1000000] maximum(v4, v5)
+  ROOT v7 = f64[1000000] add(v2, v6)
+}
+
+; ==== LLVM IR (before -O3) ====
+; ModuleID = 'microxla'
+source_filename = "microxla"
+
+define void @kernel(ptr %0, ptr %1) {
+entry:
+  %2 = getelementptr ptr, ptr %0, i64 0
+  %p0 = load ptr, ptr %2, align 8
+  %3 = getelementptr ptr, ptr %0, i64 1
+  %p1 = load ptr, ptr %3, align 8
+  br label %loop
+
+loop:                                             ; preds = %loop, %entry
+  %i = phi i64 [ 0, %entry ], [ %i.next, %loop ]
+  %4 = getelementptr double, ptr %p0, i64 %i
+  %5 = load double, ptr %4, align 8
+  %6 = getelementptr double, ptr %p1, i64 %i
+  %7 = load double, ptr %6, align 8
+  %8 = fmul double %5, %7
+  %9 = fadd double %8, 6.000000e+00
+  %10 = fcmp ogt double %9, 0.000000e+00
+  %11 = select i1 %10, double %9, double 0.000000e+00
+  %12 = fadd double %8, %11
+  %13 = getelementptr double, ptr %1, i64 %i
+  store double %12, ptr %13, align 8
+  %i.next = add i64 %i, 1
+  %14 = icmp eq i64 %i.next, 1000000
+  br i1 %14, label %exit, label %loop
+
+exit:                                             ; preds = %loop
+  ret void
+}
+; ==== LLVM IR (after -O3) ====
+; ModuleID = 'microxla'
+source_filename = "microxla"
+target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"
+target triple = "x86_64-pc-linux-gnu"
+
+; Function Attrs: nofree norecurse nosync nounwind memory(read, argmem: readwrite, inaccessiblemem: none)
+define void @kernel(ptr nocapture readonly %0, ptr nocapture writeonly %1) local_unnamed_addr #0 {
+entry:
+  %p0 = load ptr, ptr %0, align 8
+  %2 = getelementptr i8, ptr %0, i64 8
+  %p1 = load ptr, ptr %2, align 8
+  %p12 = ptrtoint ptr %p1 to i64
+  %p01 = ptrtoint ptr %p0 to i64
+  %3 = ptrtoint ptr %1 to i64
+  %4 = sub i64 %3, %p01
+  %diff.check = icmp ult i64 %4, 32
+  %5 = sub i64 %3, %p12
+  %diff.check3 = icmp ult i64 %5, 32
+  %conflict.rdx = or i1 %diff.check, %diff.check3
+  br i1 %conflict.rdx, label %loop, label %vector.body
+
+vector.body:                                      ; preds = %entry, %vector.body
+  %index = phi i64 [ %index.next, %vector.body ], [ 0, %entry ]
+  %6 = getelementptr double, ptr %p0, i64 %index
+  %7 = getelementptr i8, ptr %6, i64 16
+  %wide.load = load <2 x double>, ptr %6, align 8
+  %wide.load4 = load <2 x double>, ptr %7, align 8
+  %8 = getelementptr double, ptr %p1, i64 %index
+  %9 = getelementptr i8, ptr %8, i64 16
+  %wide.load5 = load <2 x double>, ptr %8, align 8
+  %wide.load6 = load <2 x double>, ptr %9, align 8
+  %10 = fmul <2 x double> %wide.load, %wide.load5
+  %11 = fmul <2 x double> %wide.load4, %wide.load6
+  %12 = fadd <2 x double> %10, <double 6.000000e+00, double 6.000000e+00>
+  %13 = fadd <2 x double> %11, <double 6.000000e+00, double 6.000000e+00>
+  %14 = fcmp ogt <2 x double> %12, zeroinitializer
+  %15 = fcmp ogt <2 x double> %13, zeroinitializer
+  %16 = select <2 x i1> %14, <2 x double> %12, <2 x double> zeroinitializer
+  %17 = select <2 x i1> %15, <2 x double> %13, <2 x double> zeroinitializer
+  %18 = fadd <2 x double> %10, %16
+  %19 = fadd <2 x double> %11, %17
+  %20 = getelementptr double, ptr %1, i64 %index
+  %21 = getelementptr i8, ptr %20, i64 16
+  store <2 x double> %18, ptr %20, align 8
+  store <2 x double> %19, ptr %21, align 8
+  %index.next = add nuw i64 %index, 4
+  %22 = icmp eq i64 %index.next, 1000000
+  br i1 %22, label %exit, label %vector.body, !llvm.loop !0
+
+loop:                                             ; preds = %entry, %loop
+  %i = phi i64 [ %i.next, %loop ], [ 0, %entry ]
+  %23 = getelementptr double, ptr %p0, i64 %i
+  %24 = load double, ptr %23, align 8
+  %25 = getelementptr double, ptr %p1, i64 %i
+  %26 = load double, ptr %25, align 8
+  %27 = fmul double %24, %26
+  %28 = fadd double %27, 6.000000e+00
+  %29 = fcmp ogt double %28, 0.000000e+00
+  %30 = select i1 %29, double %28, double 0.000000e+00
+  %31 = fadd double %27, %30
+  %32 = getelementptr double, ptr %1, i64 %i
+  store double %31, ptr %32, align 8
+  %i.next = add nuw nsw i64 %i, 1
+  %33 = icmp eq i64 %i.next, 1000000
+  br i1 %33, label %exit, label %loop, !llvm.loop !3
+
+exit:                                             ; preds = %vector.body, %loop
+  ret void
+}
+
+attributes #0 = { nofree norecurse nosync nounwind memory(read, argmem: readwrite, inaccessiblemem: none) }
+
+!0 = distinct !{!0, !1, !2}
+!1 = !{!"llvm.loop.isvectorized", i32 1}
+!2 = !{!"llvm.loop.unroll.runtime.disable"}
+!3 = distinct !{!3, !1}
+interpreter (ref)      1280.2 ms
+JIT kernel             7.7 ms
+results match: true  (out[0..2] = 6 6.9093 5.2432)

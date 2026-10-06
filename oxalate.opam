@@ -1,0 +1,31 @@
+opam-version: "2.0"
+synopsis: "OCaml Micro XLA"
+description: "JIT compiler using OCaml + LLVM for XLA-like representations"
+maintainer: ["Ethylenes"]
+authors: ["Ethylenes"]
+license: "LICENSE"
+tags: ["OCaml"]
+homepage: "https://github.com/Ethylenes/Oxalate"
+doc: "https://github.com/Ethylenes/Oxalate"
+bug-reports: "https://github.com/Ethylenes/Oxalate/issues"
+depends: [
+  "dune" {>= "3.24"}
+  "ocaml"
+  "odoc" {with-doc}
+]
+build: [
+  ["dune" "subst"] {dev}
+  [
+    "dune"
+    "build"
+    "-p"
+    name
+    "-j"
+    jobs
+    "@install"
+    "@runtest" {with-test}
+    "@doc" {with-doc}
+  ]
+]
+dev-repo: "git+https://github.com/Ethylenes/Oxalate.git"
+x-maintenance-intent: ["(latest)"]
